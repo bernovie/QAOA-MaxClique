@@ -23,7 +23,7 @@ class Node:
 	
     def addEdge(self, edge):
         if (edge.connects(self)):
-        	self.edges.append(edge)
+            self.edges.append(edge)
     
     def __eq__(self, node):
         if(self.id == node.id):
