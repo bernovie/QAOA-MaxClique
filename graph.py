@@ -36,7 +36,7 @@ class Graph:
 	def __init__(self, numNodes, numEdges=None):
 		self.maxEdges = numNodes * (numNodes - 1) /2
 		if numEdges == None:
-			self.numEdges = np.random.randint(0, self.maxEdges)
+			self.numEdges = np.random.randint(1, self.maxEdges+1)
 		else:
 			self.numEdges = numEdges
 		self.numNodes = numNodes
@@ -46,16 +46,31 @@ class Graph:
 			self.nodes.append(Node(i))
 		
 		for i in range(self.numEdges):
-			while(True):
-				while(True):
-					node1 = self.nodes[np.random.randint(0, self.numNodes)]
+			node1 = self.nodes[np.random.randint(0, self.numNodes)]
+			node2 = self.nodes[np.random.randint(0, self.numNodes)]
+			while(node1 == node2):
+				node2 = self.nodes[np.random.randint(0, self.numNodes)]
+			myEdge = Edge(node1, node2)
+			while(myEdge in self.edges):
+				node1 = self.nodes[np.random.randint(0, self.numNodes)]
+				node2 = self.nodes[np.random.randint(0, self.numNodes)]
+				while(node1 == node2):
 					node2 = self.nodes[np.random.randint(0, self.numNodes)]
-					if (node2 != node1):
-						break
-				edge1 = Edge(node1, node2)
-			if (not edge1 in self.edges):
-				break
-		
+				myEdge = Edge(node1, node2)
+			self.edges.append(myEdge)
+
+	def getEdgesComp(self):
+		allEdges = []
+		edgesComplement = []
+		for i in range(self.numNodes):
+			for j in range(i+1, self.numNodes):
+				allEdges.append(Edge(self.nodes[i], self.nodes[j]))
+
+		for edge in allEdges:
+			if not edge in self.edges:
+				edgesComplement.append(edge)
+		return edgesComplement
+
 	def getMaxEdges(self):
 		return self.maxEdges
 
@@ -89,10 +104,10 @@ class Graph:
 		for node in self.nodes:
 			if(not node in otherGraph.nodes):
 				return False
-			for edge in self.edges:
-				if(not edge in otherGraph.edges):
-					return False
-				return True
+		for edge in self.edges:
+			if(not edge in otherGraph.edges):
+				return False
+		return True
 
 	def __ne__(self, otherGraph):
 		return not self == otherGraph

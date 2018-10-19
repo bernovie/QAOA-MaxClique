@@ -1,7 +1,6 @@
 import qiskit
 import numpy as np
 import matplotlib.pyplot as plt
-from HW5supplemental import *
 from graph import *
 
 PENALTY = 2;
@@ -21,15 +20,6 @@ def makeCircuit(x, y):
 def measureInput(qc, q_input, c):
     for i in range(len(q_input)):
         qc.measure(q_input[i], c[i])
-    job = qiskit.execute(qc, backend='local_qasm_simulator', shots=1024)
-    return job.result().get_counts(qc)
-
-def measure(qc, q_input, q_output, c):
-    m = len(q_output)
-    for i in range(len(q_input)):
-        qc.measure(q_input[i], c[m+i])
-    for e in range(len(q_output)):
-        qc.measure(q_output[e], c[e])
     job = qiskit.execute(qc, backend='local_qasm_simulator', shots=1024)
     return job.result().get_counts(qc)
 
@@ -64,15 +54,14 @@ def main():
     gamma = []
     beta = []
     nodes = 3
+    qc, c, q_input, q_output = makeCircuit(nodes,1);
+
     for i in range(P):
         gamma.append(np.random.uniform(0,2*np.pi))
     for i in range(P):
         beta.append(np.random.uniform(0,np.pi))
     
-    myGraph = Graph(nodes)
-
-    qc, c, q_input, q_output = makeCircuit(nodes,1);
-    test5(qc, q_input, c)
-
+    myGraph = Graph(nodes, 0)
+    print("Not Edges:", myGraph.getEdgesComp());
+    edges = myGraph.getEdges()
 main()
-
