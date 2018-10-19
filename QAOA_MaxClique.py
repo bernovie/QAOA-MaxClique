@@ -54,7 +54,7 @@ def main():
     gamma = []
     beta = []
     nodes = 3
-    qc, c, q_input, q_output = makeCircuit(nodes,1);
+    qc, c, q_input, q_output = makeCircuit(nodes+1,1);
 
     for i in range(P):
         gamma.append(np.random.uniform(0,2*np.pi))
@@ -62,6 +62,28 @@ def main():
         beta.append(np.random.uniform(0,np.pi))
     
     myGraph = Graph(nodes, 0)
-    print("Not Edges:", myGraph.getEdgesComp());
+    complement = myGraph.getEdgesComp());
     edges = myGraph.getEdges()
+    ### H on every input register
+    for node in q_input:
+        qc.h(node)
+
+    ### APPLY V AND W
+    for i in range(P):
+        ### APPLY V
+        # EDGES IN THE GRAPH
+        for edge in edges:
+            qc.cu1(-gamma, q_input[edge.node1], q_input[edge.node2])
+        # EDGES NOT IN THE GRAPH
+        for edge in complement:
+            qc.cu1(gamma*PENALTY, q_input[edge.node1], q_input[edge.node2])
+
+        ### APPLY W
+        for node in q_input:
+            qc.h(node)
+            qc.u1(2*beta[i], node)
+            qc.h(node)
+
+    ### Measure. Then we need to optimize beta and gamma choices.
+        
 main()
