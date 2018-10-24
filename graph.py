@@ -6,7 +6,10 @@ class Edge:
 
 	def connects(self, node):
 		return node in self.nodes
-	
+
+	def getNodes(self):
+                return self.nodes
+
 	def __eq__(self, otherEdge):
 		for node in self.nodes:
 			if(not node in otherEdge.nodes):
@@ -44,20 +47,20 @@ class Graph:
 		self.nodes = []
 		for i in range(self.numNodes):
 			self.nodes.append(Node(i))
-		
-		for i in range(self.numEdges):
-			node1 = self.nodes[np.random.randint(0, self.numNodes)]
-			node2 = self.nodes[np.random.randint(0, self.numNodes)]
-			while(node1 == node2):
-				node2 = self.nodes[np.random.randint(0, self.numNodes)]
-			myEdge = Edge(node1, node2)
-			while(myEdge in self.edges):
-				node1 = self.nodes[np.random.randint(0, self.numNodes)]
-				node2 = self.nodes[np.random.randint(0, self.numNodes)]
-				while(node1 == node2):
-					node2 = self.nodes[np.random.randint(0, self.numNodes)]
-				myEdge = Edge(node1, node2)
-			self.edges.append(myEdge)
+		if(numNodes > 1):
+                        for i in range(self.numEdges):
+                                node1 = self.nodes[np.random.randint(0, self.numNodes)]
+                                node2 = self.nodes[np.random.randint(0, self.numNodes)]
+                                while(node1 == node2):
+                                        node2 = self.nodes[np.random.randint(0, self.numNodes)]
+                                myEdge = Edge(node1, node2)
+                                while(myEdge in self.edges):
+                                        node1 = self.nodes[np.random.randint(0, self.numNodes)]
+                                        node2 = self.nodes[np.random.randint(0, self.numNodes)]
+                                        while(node1 == node2):
+                                                node2 = self.nodes[np.random.randint(0, self.numNodes)]
+                                        myEdge = Edge(node1, node2)
+                                self.edges.append(myEdge)
 
 	def getEdgesComp(self):
 		allEdges = []
