@@ -86,6 +86,9 @@ class Graph:
 	def getNumEdges(self):
 		return self.numEdges
 
+	def getMaxEdges(self):
+		return self.maxEdges
+
 	def getNumNodes(self):
 		return self.numNodes
 

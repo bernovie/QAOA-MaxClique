@@ -1,9 +1,9 @@
 import qiskit
 import numpy as np
 import matplotlib.pyplot as plt
+import json
 from graph import *
 
-PENALTY = 5;
 P = 1;
 
 def makeCircuit(inbits, outbits):
@@ -22,14 +22,6 @@ def measureInput(qc, q_input, c):
         qc.measure(q_input[i], c[i])
     job = qiskit.execute(qc, backend='local_qasm_simulator', shots=1024)
     return job.result().get_counts(qc)
-
-def positiveConstraint(qc, q_i, q_j, gamma):
-    qc.cu1(-gamma, q_i, q_j)
-    return
-
-def negativeConstraint(qc, q_i, q_j, gamma):
-    qc.cu1(PENALTY*gamma, q_i, q_j)
-    return
 
 def test5(qc, q_input, c):
     data = measureInput(qc, q_input, c)
@@ -53,7 +45,7 @@ def test5(qc, q_input, c):
 def applyQAOA(gamma, beta, graph):
     ### INIT REGS
     qc, c, q_input, q_output = makeCircuit(graph.getNumNodes(), 1);
-    
+    PENALTY = int(graph.getMaxEdges())
     ### H on every input register
     for node in q_input:
         qc.h(node)
@@ -65,12 +57,12 @@ def applyQAOA(gamma, beta, graph):
         # EDGES IN THE GRAPH
         for edge in edges:
             nodeList = edge.getNodes()
-            positiveConstraint(qc, q_input[nodeList[0].name], q_input[nodeList[1].name], gamma)
+            qc.cu1(-gamma, q_input[nodeList[0].name], q_input[nodeList[1].name])
         # EDGES NOT IN THE GRAPH
         for edge in complement:
             nodeList = edge.getNodes()
-            negativeConstraint(qc, q_input[nodeList[0].name], q_input[nodeList[1].name], gamma)
-
+            qc.cu1(PENALTY*gamma, q_input[nodeList[0].name], q_input[nodeList[1].name])
+            
         ### APPLY W
         for node in q_input:
             qc.h(node)
@@ -92,7 +84,7 @@ def applyQAOA(gamma, beta, graph):
             counts[key[1:]] = results[key]
         else:
             counts[key[1:]] += results[key] 
-    #print(counts)
+    print(counts)
     expectation = 0
     for val in counts:
         cliqNum = 0
@@ -107,7 +99,9 @@ def applyQAOA(gamma, beta, graph):
             nodeList = edge.getNodes()
             if val[nodeList[0].name] == '1' and val[nodeList[1].name] == '1':
                 cliqNum -= PENALTY
-            
+        
+        print("cliq size", cliqNum)
+        numNodesInCliq = cliqNum
         expectation += counts[val]/1024 * cliqNum
     #print("1110:", counts['1110'], "and 1011:", counts['1011'])
     return expectation
@@ -183,20 +177,51 @@ def main():
     #print("Expectation Value:", expect)
 
     ### OPTIMIZE
-    bestGamma, bestBeta = optimize(myGraph, 0.1, 0.1, 0.05)
+    #bestGamma, bestBeta = optimize(myGraph, 0.1, 0.1, 0.05)
     # Optimal Gamma: 3.10693359375 Optimal Beta: 2.50830078125
     # This is very likely a local max though.
     # We might want optimize from various start positions and compare results
     # Also need to discuss optimization parameters cause I kind of chose those arbitrarily
-    
-    print("Optimal Gamma:", bestGamma, "Optimal Beta:", bestBeta)
+    """
+    Hi this is a block Comment
+    """
+    print("Optimized Expectation value", applyQAOA(3.10693359375, 2.50830078125, myGraph))
+    #print("Optimal Gamma:", bestGamma, "Optimal Beta:", bestBeta)
 
-    ### TODO: Make graphs.
+    ### Make graphs.
     # I'm thinking we hold one variable constant at its maxed value
     # and vary the other and vice versa.
     # Gamma has a larger range than beta. Do we want more data points for gamma than beta?
     # The last page of the worksheet says exactly which graphs we need in our report
     # so make sure we have at least those
+    """gamma = 3.10693359375
+    beta = 2.50830078125
+    betas = np.linspace(0, np.pi, 100)
+    gammas = np.linspace(0, 2*np.pi, 100)
+    varyingBeta = []
+    varyingGamma = []
+    
+    y = [applyQAOA(gammaa, beta, myGraph) for gammaa in gammas]
+    with open("varyingGamma.txt", 'w') as f:
+        json.dump(y, f)
+        
+    y = [applyQAOA(gamma, betaa, myGraph) for betaa in betas]
+    with open("varyingBeta.txt", 'w') as f:
+        json.dump(y, f)
+     """   
+    #with open("varyingGamma.txt", 'r') as f:
+    #    varyingGamma = json.load(f)
+    
+    #with open("varyingBeta.txt", 'r') as f:
+    #   varyingBeta = json.load(f)
 
+    #betaG = plt.plot(betas, varyingBeta)
+    #gammaG = plt.plot(gammas, varyingGamma)
+    #plt.legend(('Beta Graph', 'Gamma Graph'))
+    #plt.xlabel('Beta and Gamma values')
+    #plt.ylabel('Expectation Value')
+    #plt.title('Expectation Value vs Gamma and Beta')
+    #plt.show()
+    
     
 main()
