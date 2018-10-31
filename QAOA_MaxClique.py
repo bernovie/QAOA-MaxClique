@@ -124,10 +124,16 @@ def optimize(graph, epsilon, eta, threshold, startGamma, startBeta):
     flipper = True #Alternate between maxing gamma and maxing beta
     while((abs(dgamma) + abs(dbeta))/2 > threshold):
         if(flipper):
-            gamma += (dgamma/abs(dgamma) * dgamma * eta) % (2*np.pi)
+            if (dgamma > 0): 
+                gamma += (dgamma * eta) % (2*np.pi)
+            elif (dgamma < 0):
+                gamma -= (dgamma * eta) % (2*np.pi)
             dgamma = (applyQAOA(gamma + epsilon, beta, graph) - applyQAOA(gamma - epsilon, beta, graph))/(2*epsilon)
         else:
-            beta += (dbeta/abs(dbeta) * dbeta * eta) % np.pi
+            if(dbeta > 0):
+                beta += (dbeta * eta) % np.pi
+            elif (dbeta < 0):
+                beta -= (dbeta * eta) % np.pi
             dbeta = (applyQAOA(gamma, beta + epsilon, graph) - applyQAOA(gamma, beta + epsilon, graph))/(2*epsilon)
             
         count+=1
