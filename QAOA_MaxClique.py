@@ -45,7 +45,7 @@ def test5(qc, q_input, c):
 def applyQAOA(gamma, beta, graph):
     ### INIT REGS
     qc, c, q_input, q_output = makeCircuit(graph.getNumNodes(), 1);
-    PENALTY = int(graph.getMaxEdges())
+    PENALTY = graph.getMaxEdges()
     ### H on every input register
     for node in q_input:
         qc.h(node)
@@ -84,12 +84,10 @@ def applyQAOA(gamma, beta, graph):
             counts[key[1:]] = results[key]
         else:
             counts[key[1:]] += results[key] 
-    print(counts)
+    #print(counts)
     expectation = 0
     for val in counts:
         cliqNum = 0
-        #print("Edges:", len(edges))
-        #print("Complement:", len(complement))
         for edge in edges:
             nodeList = edge.getNodes()
             #print("Node 1:", nodeList[0].name,"Node 2:", nodeList[1].name)
@@ -99,11 +97,7 @@ def applyQAOA(gamma, beta, graph):
             nodeList = edge.getNodes()
             if val[nodeList[0].name] == '1' and val[nodeList[1].name] == '1':
                 cliqNum -= PENALTY
-        
-        print("cliq size", cliqNum)
-        numNodesInCliq = cliqNum
         expectation += counts[val]/1024 * cliqNum
-    #print("1110:", counts['1110'], "and 1011:", counts['1011'])
     return expectation
 
 
@@ -121,7 +115,7 @@ def gradient(func, params, epsilon, whichParam):
 # eta is learning rate
 # threshold is the average of gamma and beta that we will consider a max
 
-def optimize(graph, epsilon, eta, threshold):
+def optimize(graph, epsilon, eta, threshold, startGamma, startBeta):
     count = 0
     gamma = 2
     beta = 2
@@ -130,10 +124,16 @@ def optimize(graph, epsilon, eta, threshold):
     flipper = True #Alternate between maxing gamma and maxing beta
     while((abs(dgamma) + abs(dbeta))/2 > threshold):
         if(flipper):
-            gamma += (dgamma/abs(dgamma) * dgamma * eta) % (2*np.pi)
+            if (dgamma > 0): 
+                gamma += (dgamma * eta) % (2*np.pi)
+            elif (dgamma < 0):
+                gamma -= (dgamma * eta) % (2*np.pi)
             dgamma = (applyQAOA(gamma + epsilon, beta, graph) - applyQAOA(gamma - epsilon, beta, graph))/(2*epsilon)
         else:
-            beta += (dbeta/abs(dbeta) * dbeta * eta) % np.pi
+            if(dbeta > 0):
+                beta += (dbeta * eta) % np.pi
+            elif (dbeta < 0):
+                beta -= (dbeta * eta) % np.pi
             dbeta = (applyQAOA(gamma, beta + epsilon, graph) - applyQAOA(gamma, beta + epsilon, graph))/(2*epsilon)
             
         count+=1
@@ -141,7 +141,25 @@ def optimize(graph, epsilon, eta, threshold):
     
     print(count)
     return gamma, beta
-    
+
+def superOptimize(graph, epsilon, eta, threshold, numOfTrials):
+    maxVal = -graph.getMaxEdges() * graph.getNumEdges()
+    maxG = -1
+    maxB = -1
+    tempVal = 0
+    for i in range(numOfTrials):
+        tempG, tempB = optimize(graph, epsilon, eta, threshold, i*2*np.pi/numOfTrials, i*np.pi/numOfTrials)
+        tempSum = 0
+        for i in range(10):
+            tempSum += applyQAOA(tempG, tempB, graph)
+        tempVal = tempSum/10
+        if(tempVal > maxVal):
+            maxVal = tempVal
+            maxG = tempG
+            maxB = tempB
+
+    return maxG, maxB, maxVal
+        
 def main():
     ### If P > 0
     #gamma = []
@@ -182,10 +200,10 @@ def main():
     # This is very likely a local max though.
     # We might want optimize from various start positions and compare results
     # Also need to discuss optimization parameters cause I kind of chose those arbitrarily
-    """
-    Hi this is a block Comment
-    """
-    print("Optimized Expectation value", applyQAOA(3.10693359375, 2.50830078125, myGraph))
+
+    bestGamma, bestBeta, bestVal = superOptimize(myGraph, 0.1, 0.1, 0.05, 16)
+    print("BestGamma: ", bestGamma, "bestBeta", bestBeta)
+    print("Optimized Expectation value", applyQAOA(bestGamma, bestBeta, myGraph))
     #print("Optimal Gamma:", bestGamma, "Optimal Beta:", bestBeta)
 
     ### Make graphs.
