@@ -52,22 +52,21 @@ def applyQAOA(gamma, beta, graph):
     complement = graph.getEdgesComp();
     edges = graph.getEdges()
     ### APPLY V AND W
-    for i in range(P):
-        ### APPLY V
-        # EDGES IN THE GRAPH
-        for edge in edges:
-            nodeList = edge.getNodes()
-            qc.cu1(-gamma, q_input[nodeList[0].name], q_input[nodeList[1].name])
+    ### APPLY V
+    # EDGES IN THE GRAPH
+    for edge in edges:
+        nodeList = edge.getNodes()
+        qc.cu1(-gamma, q_input[nodeList[0].name], q_input[nodeList[1].name])
         # EDGES NOT IN THE GRAPH
         for edge in complement:
             nodeList = edge.getNodes()
             qc.cu1(PENALTY*gamma, q_input[nodeList[0].name], q_input[nodeList[1].name])
-            
-        ### APPLY W
-        for node in q_input:
-            qc.h(node)
-            qc.u1(2*beta, node)
-            qc.h(node)
+                    
+    ### APPLY W
+    for node in q_input:
+        qc.h(node)
+        qc.u1(2*beta, node)
+        qc.h(node)
 
     ### Measure
     results = measureInput(qc, q_input, c)
