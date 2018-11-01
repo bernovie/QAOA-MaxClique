@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 from graph import *
-
+from qiskit.backends.aer import QasmSimulatorPy
 P = 1;
 
 def makeCircuit(inbits, outbits):
@@ -20,7 +20,7 @@ def makeCircuit(inbits, outbits):
 def measureInput(qc, q_input, c):
     for i in range(len(q_input)):
         qc.measure(q_input[i], c[i])
-    job = qiskit.execute(qc, backend='local_qasm_simulator', shots=1024)
+    job = qiskit.execute(qc, QasmSimulatorPy(), shots=1024)
     return job.result().get_counts(qc)
 
 def test5(qc, q_input, c):
@@ -42,6 +42,10 @@ def test5(qc, q_input, c):
     plt.title('Measurement Histogram')
     plt.show()
 
+# Gamma: 4.6015625 Beta: 0.18702062766020688
+all_average_costs = []
+all_minimum_costs = []
+all_maximum_costs = []
 def applyQAOA(gamma, beta, graph):
     ### INIT REGS
     qc, c, q_input, q_output = makeCircuit(graph.getNumNodes(), 1);
@@ -84,10 +88,15 @@ def applyQAOA(gamma, beta, graph):
             counts[key[1:]] = results[key]
         else:
             counts[key[1:]] += results[key] 
-
     
     #print(counts)
     expectation = 0
+    costs = []
+    values = []
+    min_cliqNum = 0
+    max_cliqNum = 0
+    values_at_max_cliqNum = 0
+    dictionary_of_cost = dict()
     for val in counts:
         cliqNum = 0
         for edge in edges:
@@ -99,10 +108,45 @@ def applyQAOA(gamma, beta, graph):
             nodeList = edge.getNodes()
             if val[nodeList[0].name] == '1' and val[nodeList[1].name] == '1':
                 cliqNum -= PENALTY
+        
+        if (cliqNum < min_cliqNum):
+            min_cliqNum = cliqNum
+        
+        if (cliqNum > max_cliqNum):
+            max_cliqNum = cliqNum
+            val_at_max_cliqNum = val
+        
         expectation += counts[val]/1024 * cliqNum
+        costs.append(cliqNum)
+        values.append(val)
+        dictionary_of_cost[val] = cliqNum
+    colors = ["green" if dictionary_of_cost[value] == dictionary_of_cost[val_at_max_cliqNum] else "blue" for value in values]
+    max_vals = []
+    
+    for val in values:
+        if dictionary_of_cost[val] == dictionary_of_cost[val_at_max_cliqNum]:
+            max_vals.append(val)
+
+    average_cost = sum(costs)/len(costs)
+    all_average_costs.append(average_cost)
+    all_maximum_costs.append(max_cliqNum)
+    all_minimum_costs.append(min_cliqNum)
+
+    print("The maximum cliques of these graph are: " + str(max_vals) + "\n where a 1 represents in the clique and a 0 not in the clique")
+    costs = [cost + abs(min_cliqNum) for cost in costs]
+
+    cost_plot = plt.bar(values, costs, color=colors)
+    plt.tick_params(
+    axis='x',          # changes apply to the x-axis
+    which='both',      # both major and minor ticks are affected
+    bottom=False,      # ticks along the bottom edge are off
+    top=False,         # ticks along the top edge are off
+    labelbottom=False) # labels along the bottom edge are off
+    plt.xlabel("Output States")
+    plt.ylabel("Cost offset by lowest Cost")
+    plt.title("Output State vs. Cost")
+    plt.show()
     return expectation
-
-
 
 def gradient(func, params, epsilon, whichParam):
     first = params
@@ -203,10 +247,24 @@ def main():
     # We might want optimize from various start positions and compare results
     # Also need to discuss optimization parameters cause I kind of chose those arbitrarily
 
-    bestGamma, bestBeta, bestVal = superOptimize(myGraph, 0.1, 0.1, 0.05, 16)
+    #bestGamma, bestBeta, bestVal = superOptimize(myGraph, 0.1, 0.1, 0.05, 16)
+    bestGamma = 4.6015625
+    bestBeta = 0.18702062766020688
     print("BestGamma: ", bestGamma, "bestBeta", bestBeta)
     print("Optimized Expectation value", applyQAOA(bestGamma, bestBeta, myGraph))
     #print("Optimal Gamma:", bestGamma, "Optimal Beta:", bestBeta)
+
+
+    myGraph2 = Graph(6)
+    myGraph3 = Graph(6)
+
+    myGraph4 = Graph(8)
+
+    print("Optimized Expectation value for myGraph2", applyQAOA(bestGamma, bestBeta, myGraph2))
+
+    print("Optimized Expectation value for myGraph3", applyQAOA(bestGamma, bestBeta, myGraph3))
+
+    print("Optimized Expectation value for myGraph4", applyQAOA(bestGamma, bestBeta, myGraph4))
 
     ### Make graphs.
     # I'm thinking we hold one variable constant at its maxed value
@@ -221,13 +279,13 @@ def main():
     varyingBeta = []
     varyingGamma = []
     
-    y = [applyQAOA(gammaa, beta, myGraph) for gammaa in gammas]
-    with open("varyingGamma.txt", 'w') as f:
-        json.dump(y, f)
+    #y = [applyQAOA(gammaa, beta, myGraph) for gammaa in gammas]
+    #with open("varyingGamma.txt", 'w') as f:
+    #    json.dump(y, f)
         
-    y = [applyQAOA(gamma, betaa, myGraph) for betaa in betas]
-    with open("varyingBeta.txt", 'w') as f:
-        json.dump(y, f)
+    #y = [applyQAOA(gamma, betaa, myGraph) for betaa in betas]
+    #with open("varyingBeta.txt", 'w') as f:
+    #    json.dump(y, f)
            
     #with open("varyingGamma.txt", 'r') as f:
     #    varyingGamma = json.load(f)
@@ -242,11 +300,21 @@ def main():
     #plt.ylabel('Expectation Value')
     #plt.title('Expectation Value vs Gamma and Beta')
     #plt.show()
+
+    plt.scatter([4, 6, 6, 8], all_average_costs)
+    plt.scatter([4, 6, 6, 8], all_minimum_costs)
+    plt.scatter([4, 6, 6, 8], all_maximum_costs)
+    plt.legend(('Average Costs', 'Minimum Costs', 'Maximum Costs'))
+    plt.xlabel('Number of nodes')
+    plt.ylabel('Cost')
+    plt.title('Average, Minimum and Maximum Costs')
+    plt.show()
+
     
 def myMain():
     qc, c, q_input, q_output = makeCircuit(3, 2)
     #print(measureInput(qc,q_input, c))
     test5(qc, q_input, c)  
 
-myMain()
-#main()
+#myMain()
+main()
