@@ -4,10 +4,8 @@ import matplotlib.pyplot as plt
 import json
 from graph import *
 
-P = 1;
-
 # Random comment
-
+P =1
 def makeCircuit(inbits, outbits):
     q = qiskit.QuantumRegister(inbits+outbits)
     c = qiskit.ClassicalRegister(inbits+outbits)
@@ -89,7 +87,9 @@ def applyQAOA(gamma, beta, graph):
 
     
     #print(counts)
-    expectation = 0
+    eox = 0
+    eox2 = 0
+
     for val in counts:
         cliqNum = 0
         for edge in edges:
@@ -101,17 +101,10 @@ def applyQAOA(gamma, beta, graph):
             nodeList = edge.getNodes()
             if val[nodeList[0].name] == '1' and val[nodeList[1].name] == '1':
                 cliqNum -= PENALTY
-        expectation += counts[val]/1024 * cliqNum
-    return expectation
-
-
-
-def gradient(func, params, epsilon, whichParam):
-    first = params
-    second = params
-    first[whichParam] += epsilon
-    second[whichParam] -= epsilon
-    return func(*first) - func(*second)/(2*epsilon)
+        eox += counts[val]/1024 * cliqNum
+        eox2 += (cliqNum**2) * counts[val]/1024
+    std = np.sqrt((len(counts)/(len(counts) -1))*(eox2 - eox**2))
+    return eox, std
 
 ### gradient ascent optimizer
 # graph is graph to optimize over
@@ -119,7 +112,7 @@ def gradient(func, params, epsilon, whichParam):
 # eta is learning rate
 # threshold is the average of gamma and beta that we will consider a max
 
-def optimize(graph, epsilon, eta, threshold, startGamma, startBeta):
+def optimize(graph, epsilon, eta, threshold):
     count = 0
     gamma = 2
     beta = 2
@@ -129,54 +122,30 @@ def optimize(graph, epsilon, eta, threshold, startGamma, startBeta):
     while((abs(dgamma) + abs(dbeta))/2 > threshold):
         if(flipper):
             if (dgamma > 0): 
-                gamma += (dgamma * eta) % (2*np.pi)
+                gamma = (gamma + (dgamma * eta)) % (2*np.pi)
             elif (dgamma < 0):
-                gamma -= (dgamma * eta) % (2*np.pi)
+                gamma = (gamma - (dgamma * eta)) % (2*np.pi)
             dgamma = (applyQAOA(gamma + epsilon, beta, graph) - applyQAOA(gamma - epsilon, beta, graph))/(2*epsilon)
         else:
             if(dbeta > 0):
-                beta += (dbeta * eta) % np.pi
+                beta = (beta + (dbeta * eta)) % np.pi
             elif (dbeta < 0):
-                beta -= (dbeta * eta) % np.pi
+                beta = (beta - (dbeta * eta)) % np.pi
             dbeta = (applyQAOA(gamma, beta + epsilon, graph) - applyQAOA(gamma, beta + epsilon, graph))/(2*epsilon)
             
         count+=1
+        print("Count", count, "dg", dgamma, "db", dbeta)
         flipper = not flipper
     
     print(count)
     return gamma, beta
 
-def superOptimize(graph, epsilon, eta, threshold, numOfTrials):
-    maxVal = -graph.getMaxEdges() * graph.getNumEdges()
-    maxG = -1
-    maxB = -1
-    tempVal = 0
-    for i in range(numOfTrials):
-        tempG, tempB = optimize(graph, epsilon, eta, threshold, i*2*np.pi/numOfTrials, i*np.pi/numOfTrials)
-        tempSum = 0
-        for i in range(10):
-            tempSum += applyQAOA(tempG, tempB, graph)
-        tempVal = tempSum/10
-        if(tempVal > maxVal):
-            maxVal = tempVal
-            maxG = tempG
-            maxB = tempB
-
-    return maxG, maxB, maxVal
-        
 def main():
-    ### If P > 0
-    #gamma = []
-    #beta = []
-    #   
-    #for i in range(P):
-    #    gamma.append(np.random.uniform(0,2*np.pi))
-    #for i in range(P):
-    #    beta.append(np.random.uniform(0,np.pi))
-
-
     
     ###TESTING GRAPH
+    #0---1
+    #| / |
+    #3---2
     myGraph = Graph(0, 0)
     nodes = [Node(i) for i in range(4)]
 
@@ -199,16 +168,13 @@ def main():
     #print("Expectation Value:", expect)
 
     ### OPTIMIZE
-    #bestGamma, bestBeta = optimize(myGraph, 0.1, 0.1, 0.05)
-    # Optimal Gamma: 3.10693359375 Optimal Beta: 2.50830078125
-    # This is very likely a local max though.
-    # We might want optimize from various start positions and compare results
-    # Also need to discuss optimization parameters cause I kind of chose those arbitrarily
 
-    bestGamma, bestBeta, bestVal = superOptimize(myGraph, 0.1, 0.1, 0.05, 16)
-    print("BestGamma: ", bestGamma, "bestBeta", bestBeta)
-    print("Optimized Expectation value", applyQAOA(bestGamma, bestBeta, myGraph))
+    #bestGamma, bestBeta = optimize(myGraph, 0.1, 0.1, 0.05)
+    #print("BestGamma: ", bestGamma, "bestBeta", bestBeta)
+    #print("Optimized Expectation value", applyQAOA(bestGamma, bestBeta, myGraph))
     #print("Optimal Gamma:", bestGamma, "Optimal Beta:", bestBeta)
+    #BestGamma:  4.6015625 bestBeta 0.18702062766020688
+    #Optimized Expectation value -0.3115234375
 
     ### Make graphs.
     # I'm thinking we hold one variable constant at its maxed value
@@ -216,39 +182,61 @@ def main():
     # Gamma has a larger range than beta. Do we want more data points for gamma than beta?
     # The last page of the worksheet says exactly which graphs we need in our report
     # so make sure we have at least those
-    gamma = 3.10693359375
-    beta = 2.50830078125
-    betas = np.linspace(0, np.pi, 100)
+
+    BestGamma = 4.6015625
+    BestBeta = 0.18702062766020688
+    betas = np.linspace(0, np.pi, 10)
     gammas = np.linspace(0, 2*np.pi, 100)
     varyingBeta = []
     varyingGamma = []
+    betaSTD = []
+    gammaSTD = []
     
-    y = [applyQAOA(gammaa, beta, myGraph) for gammaa in gammas]
+    y = []
+    std = []
+    
+    for gammaa in gammas:
+        e, s = applyQAOA(gammaa, BestBeta, myGraph)
+        y.append(e)
+        std.append(s)
+
     with open("varyingGamma.txt", 'w') as f:
         json.dump(y, f)
+
+    with open("gammaSTD.txt", 'w') as f:
+        json.dump(std, f)
+    """
+    y = []
+    std = []
+    for betaa in betas:
+        e, s = applyQAOA(BestGamma, betaa, myGraph)
+        y.append(e)
+        std.append(s)
         
-    y = [applyQAOA(gamma, betaa, myGraph) for betaa in betas]
     with open("varyingBeta.txt", 'w') as f:
         json.dump(y, f)
-           
-    #with open("varyingGamma.txt", 'r') as f:
-    #    varyingGamma = json.load(f)
+
+    with open("betaSTD.txt", 'w') as f:
+        json.dump(std, f)
+    """   
+    with open("varyingGamma.txt", 'r') as f:
+        varyingGamma = json.load(f)
     
     #with open("varyingBeta.txt", 'r') as f:
     #   varyingBeta = json.load(f)
 
-    #betaG = plt.plot(betas, varyingBeta)
-    #gammaG = plt.plot(gammas, varyingGamma)
-    #plt.legend(('Beta Graph', 'Gamma Graph'))
-    #plt.xlabel('Beta and Gamma values')
-    #plt.ylabel('Expectation Value')
-    #plt.title('Expectation Value vs Gamma and Beta')
-    #plt.show()
-    
-def myMain():
-    qc, c, q_input, q_output = makeCircuit(3, 2)
-    #print(measureInput(qc,q_input, c))
-    test5(qc, q_input, c)  
+    #with open("betaSTD.txt", 'r') as f:
+    #    betaSTD = json.load(f)
 
-myMain()
-#main()
+    with open("gammaSTD.txt", 'r') as f:
+        gammaSTD = json.load(f)
+    
+    #betaG = plt.errorbar(betas, varyingBeta, betaSTD, ecolor='black', elinewidth = 0.5, capsize=3)
+    gammaG = plt.errorbar(gammas, varyingGamma, gammaSTD, ecolor='black', elinewidth = 0.5, capsize=3)
+    plt.legend(('Gamma Graph',))
+    plt.xlabel('Gamma values')
+    plt.ylabel('Expectation Value')
+    plt.title('Expectation Value vs Gamma holding Beta constant')
+    plt.show()
+
+main()
