@@ -6,6 +6,8 @@ from graph import *
 
 P = 1;
 
+# Random comment
+
 def makeCircuit(inbits, outbits):
     q = qiskit.QuantumRegister(inbits+outbits)
     c = qiskit.ClassicalRegister(inbits+outbits)
