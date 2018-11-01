@@ -75,7 +75,7 @@ class Graph:
 		return edgesComplement
 
 	def getMaxEdges(self):
-		return self.maxEdges
+		return int(self.numNodes*(self.numNodes - 1)/2)
 
 	def getEdges(self):
 		return self.edges
@@ -85,9 +85,6 @@ class Graph:
 
 	def getNumEdges(self):
 		return self.numEdges
-
-	def getMaxEdges(self):
-		return self.maxEdges
 
 	def getNumNodes(self):
 		return self.numNodes
