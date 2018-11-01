@@ -194,7 +194,7 @@ def main():
     # Gamma has a larger range than beta. Do we want more data points for gamma than beta?
     # The last page of the worksheet says exactly which graphs we need in our report
     # so make sure we have at least those
-    """gamma = 3.10693359375
+    gamma = 3.10693359375
     beta = 2.50830078125
     betas = np.linspace(0, np.pi, 100)
     gammas = np.linspace(0, 2*np.pi, 100)
@@ -208,7 +208,7 @@ def main():
     y = [applyQAOA(gamma, betaa, myGraph) for betaa in betas]
     with open("varyingBeta.txt", 'w') as f:
         json.dump(y, f)
-     """   
+           
     #with open("varyingGamma.txt", 'r') as f:
     #    varyingGamma = json.load(f)
     
