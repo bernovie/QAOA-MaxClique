@@ -85,20 +85,24 @@ all_maximum_costs = []
 all_graphs_average_cost = dict()
 fbest = []
 all_counts = []
+
 myGraphTest = Graph(0,0)
-nodes = [Node(i) for i in range(3)]
+nodes = [Node(i) for i in range(4)]
 edges = []
 edges.append(Edge(nodes[0], nodes[1]))
 edges.append(Edge(nodes[1], nodes[2]))
-edges.append(Edge(nodes[2], nodes[0]))
+edges.append(Edge(nodes[2], nodes[3]))
+edges.append(Edge(nodes[3], nodes[0]))
+edges.append(Edge(nodes[3], nodes[1]))
 
 for n in nodes:
     myGraphTest.addNode(n)
     
 for e in edges:
     myGraphTest.addEdge(e)
-def applyQAOA(gamma, beta, Graph):
-    #gamma, beta = params
+
+def applyQAOA(params, Graph=myGraphTest, showOutput=False):
+    gamma, beta = params
     ### INIT REGS
     qc, c, q_input, q_output = makeCircuit(Graph.getNumNodes(), 1);
     PENALTY = Graph.getMaxEdges()
@@ -142,6 +146,11 @@ def applyQAOA(gamma, beta, Graph):
             counts[key[1:]] += results[key] 
     
     #print(counts)
+
+    sortedCounts = []
+    for key in sorted(counts):
+        sortedCounts.append((key, counts[key]))
+
     expectation = 0
     costs = []
     values = []
@@ -149,7 +158,8 @@ def applyQAOA(gamma, beta, Graph):
     max_cliqNum = 0
     values_at_max_cliqNum = 0
     dictionary_of_cost = dict()
-    for val in counts:
+
+    for val, sortedCount in sortedCounts:
         cliqNum = 0
         for edge in edges:
             nodeList = edge.getNodes()
@@ -168,11 +178,10 @@ def applyQAOA(gamma, beta, Graph):
             max_cliqNum = cliqNum
             val_at_max_cliqNum = val
         
-        expectation += counts[val]/1024 * cliqNum
+        expectation += sortedCount/1024 * cliqNum
         costs.append(cliqNum)
         values.append(val)
         dictionary_of_cost[val] = cliqNum
-    colors = ["green" if dictionary_of_cost[value] == dictionary_of_cost[val_at_max_cliqNum] else "blue" for value in values]
     max_vals = []
     
     for val in values:
@@ -193,28 +202,33 @@ def applyQAOA(gamma, beta, Graph):
     #    all_graphs_average_cost[density] = all_average_costs
 
     #print("The maximum cliques of these graph are: " + str(max_vals) + "\n where a 1 represents in the clique and a 0 not in the clique")
-    costs = [cost + abs(min_cliqNum) for cost in costs]
-
-    """
-    cost_plot = plt.bar(values, costs, color=colors)
-    plt.text(len(counts)/2-0.5, -0.1*(max_cliqNum+abs(min_cliqNum)), 'Num Nodes: '+str(graph.getNumNodes())+' Num Edges: '+str(graph.getNumEdges()), fontsize=15, horizontalalignment='center', verticalalignment="bottom", bbox=dict(facecolor='white', alpha=0.5))
-    for val in max_vals:
-        index = list(counts.keys()).index(val)
-        plt.text(index-0.4 - len(str(val))/(2*len(counts)), max_cliqNum + abs(min_cliqNum), str(val), fontsize=8)
-
-    plt.tick_params(
-    axis='x',          # changes apply to the x-axis
-    which='both',      # both major and minor ticks are affected
-    bottom=False,      # ticks along the bottom edge are off
-    top=False,         # ticks along the top edge are off
-    labelbottom=False) # labels along the bottom edge are off
-    plt.xlabel("Output States")
-    plt.ylabel("Cost offset by lowest Cost")
-    plt.title("Output State vs. Cost")
-    plt.show()
-    """
-    #return fbest, all_counts, expectation
+    
+    if showOutput:
+        colors = ["green" if dictionary_of_cost[value] == dictionary_of_cost[val_at_max_cliqNum] else "blue" for value in values]
+        costs = [cost + abs(min_cliqNum) for cost in costs]
+        cost_plot = plt.bar(values, costs, color=colors)
+        plt.text(len(counts)/2-0.5, -0.1*(max_cliqNum+abs(min_cliqNum)), 'Num Nodes: '+str(Graph.getNumNodes())+' Num Edges: '+str(Graph.getNumEdges()), fontsize=15, horizontalalignment='center', verticalalignment="bottom", bbox=dict(facecolor='white', alpha=0.5))
+        for val in max_vals:
+            index = 0
+            for value,_ in sortedCounts:
+                if(value == val):   
+                    break
+                index += 1
+            plt.text(index-0.4 - len(str(val))/(2*len(counts)), max_cliqNum + abs(min_cliqNum), str(val), fontsize=8)
+        plt.tick_params(
+        axis='x',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        bottom=False,      # ticks along the bottom edge are off
+        top=False,         # ticks along the top edge are off
+        labelbottom=False) # labels along the bottom edge are off
+        plt.xlabel("Output States")
+        plt.ylabel("Cost offset by lowest Cost")
+        plt.title("Output State vs. Cost")
+        plt.show()
+        #return fbest, all_counts, expectation
     return expectation
+
+    
 
 def mapInputSpace(graph):
     gammahist = []
@@ -233,7 +247,7 @@ def mapInputSpace(graph):
             col += 1
             print("Gamma: %s | Beta : %s " % (gamma, beta))
         row += 1
-    print(zhist)
+    # print(zhist)
    
     gammahist = np.asarray(gammahist)
     betahist = np.asarray(betahist)
@@ -358,11 +372,11 @@ def main():
     for e in edges:
         myGraph.addEdge(e)
 
-    mapInputSpace(myGraph)
+    # mapInputSpace(myGraph)
     #print(classicalMC(myGraph))
     ### Run the algorithm
-    #expect = applyQAOA(gamma, beta, myGraph)
-    #print("Expectation Value:", expect)
+    expect = applyQAOA([1.047198, 3.010693], myGraph,showOutput=True)
+    print("Expectation Value:", expect)
 
     """myGraph2 = Graph(5)
     myGraph3 = Graph(6)
@@ -373,7 +387,7 @@ def main():
 
     ### OPTIMIZE
     #bestGamma, bestBeta = optimize(myGraphTest, 0.05, 0.00001, 0.05)
-    """res = minimize(applyQAOA,[(2,2)] , method='L-BFGS-B', bounds={(0, 2*np.pi), (0, np.pi)}, options={'disp': True})
+    """res = minimize(applyQAOA,[(1.047198,3.010693)] , method='L-BFGS-B', bounds={(0, 2*np.pi), (0, np.pi)}, options={'disp': True})
     if res.success:
         fitted_params = res.x
         print(fitted_params)
