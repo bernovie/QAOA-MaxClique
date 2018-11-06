@@ -39,8 +39,20 @@ def classicalMC(graph):
                 maxedState = tempB
     return currentMax, maxedState
 
-def getCost(currentMax):
-    return currentMax*(currentMax-1)/2
+def getCost(maxedState, graph):
+    edges = graph.getEdges()
+    complement = graph.getEdgesComp()
+    PENALTY = graph.getMaxEdges()
+    cliqNum = 0
+    for edge in edges:
+        nodelist = edge.getNodes()
+        if maxedState[nodelist[0].name] == '1' and maxedState[nodelist[1].name] == '1':
+            cliqNum += 1
+    for edgeComp in complement:
+        nodelist = edgeComp.getNodes()
+        if maxedState[nodelist[0].name] == '1' and maxedState[nodelist[1].name] == '1':
+            cliqNum -= PENALTY
+    return cliqNum
 
 def makeCircuit(inbits, outbits):
     q = qiskit.QuantumRegister(inbits+outbits)
@@ -101,7 +113,7 @@ for n in nodes:
 for e in edges:
     myGraphTest.addEdge(e)
 
-def applyQAOA(params, Graph=myGraphTest, showOutput=False):
+def applyQAOA(params,Graph=myGraphTest, showOutput=False):
     gamma, beta = params
     ### INIT REGS
     qc, c, q_input, q_output = makeCircuit(Graph.getNumNodes(), 1);
@@ -192,11 +204,11 @@ def applyQAOA(params, Graph=myGraphTest, showOutput=False):
     all_average_costs.append(average_cost)
     all_maximum_costs.append(max_cliqNum)
     all_minimum_costs.append(min_cliqNum)
-    currentMax,_ = classicalMC(Graph)
-    currentMaxCost = getCost(currentMax)
+    currentMax,maxedState = classicalMC(Graph)
+    currentMaxCost = getCost(maxedState, Graph)
     fbest = [cost/currentMaxCost for cost in costs]
     all_counts = [counts[val] for val in values]
-    
+
     #density = graph.getNumNodes()/graph.getNumEdges()
     #if density not in all_graphs_average_cost:
     #    all_graphs_average_cost[density] = all_average_costs
@@ -225,8 +237,9 @@ def applyQAOA(params, Graph=myGraphTest, showOutput=False):
         plt.ylabel("Cost offset by lowest Cost")
         plt.title("Output State vs. Cost")
         plt.show()
-        #return fbest, all_counts, expectation
-    return expectation
+    return fbest, all_counts
+    #return expectation
+    #return max_cliqNum, currentMaxCost
 
     
 
@@ -276,6 +289,33 @@ def gradient(func, params, epsilon, whichParam):
     first[whichParam] += epsilon
     second[whichParam] -= epsilon
     return func(*first) - func(*second)/(2*epsilon)
+
+def optimize2(graph, epsilon, eta, threshold):
+    count = 0
+    gamma = 5.2359
+    beta = 0.26179
+    dgamma = (applyQAOA(gamma + epsilon, beta, graph) - applyQAOA(gamma - epsilon, beta, graph))/(2*epsilon)
+    dbeta = (applyQAOA(gamma, beta + epsilon, graph) - applyQAOA(gamma, beta - epsilon, graph))/(2*epsilon)
+    flipper = True #Alternate between maxing gamma and maxing beta
+    while((abs(dgamma) + abs(dbeta))/2 > threshold):
+        if(flipper):
+            if (dgamma > 0): 
+                gamma = (gamma + (dgamma * eta)) % (2*np.pi)
+            elif (dgamma < 0):
+                gamma = (gamma - (dgamma * eta)) % (2*np.pi)
+            dgamma = (applyQAOA(gamma + epsilon, beta, graph) - applyQAOA(gamma - epsilon, beta, graph))/(2*epsilon)
+        else:
+            beta = (beta + (dbeta * eta)) % np.pi
+            dbeta = (applyQAOA(gamma, beta + epsilon, graph) - applyQAOA(gamma, beta - epsilon, graph))/(2*epsilon)
+            
+        count+=1
+        print("Function run : ", count)
+        print("Gamma : %s | Gamma Gradient: %s" % (gamma, dgamma))
+        print("Beta : %s | Beta Gradient: %s" % (beta, dbeta))
+        flipper = not flipper
+    
+    print(count)
+    return gamma, beta
 
 ### gradient ascent optimizer
 # graph is graph to optimize over
@@ -375,15 +415,33 @@ def main():
     # mapInputSpace(myGraph)
     #print(classicalMC(myGraph))
     ### Run the algorithm
-    expect = applyQAOA([1.047198, 3.010693], myGraph,showOutput=True)
-    print("Expectation Value:", expect)
+    #optimize2(myGraph, 0.01, 0.05, 0.05)
+    """allQAOACosts = []
+    allClassicalCosts = []"""
+    myGraph2 = Graph(9)
+    print(myGraph2.getNumEdges())
+    print(myGraph2.getNumNodes())
+    fbest, allcounts = applyQAOA([4.6015625, 0.18702062], myGraph2)
+    """allQAOACosts.append(max_cliqNum)
+    allClassicalCosts.append(classicalCost)"""
+
+    #print("Expectation Value:", expect)
 
     """myGraph2 = Graph(5)
+    max_cliqNum, classicalCost = applyQAOA([4.6015625, 0.18702062], myGraph2)
+    allQAOACosts.append(max_cliqNum)
+    allClassicalCosts.append(classicalCost)
     myGraph3 = Graph(6)
-
+    max_cliqNum, classicalCost = applyQAOA([4.6015625, 0.18702062], myGraph3)
+    allQAOACosts.append(max_cliqNum)
+    allClassicalCosts.append(classicalCost)
     myGraph4 = Graph(8)
+    max_cliqNum, classicalCost = applyQAOA([4.6015625, 0.18702062], myGraph4)
+    allQAOACosts.append(max_cliqNum)
+    allClassicalCosts.append(classicalCost)"""
    
-    myGraph5 = Graph(10)"""
+
+    """myGraph5 = Graph(10)"""
 
     ### OPTIMIZE
     #bestGamma, bestBeta = optimize(myGraphTest, 0.05, 0.00001, 0.05)
@@ -413,6 +471,15 @@ def main():
     #fbest2, allcounts2, _ = applyQAOA(bestGamma, bestBeta, myGraph3)
 
     #fbest3, allcounts4, _ = applyQAOA(bestGamma, bestBeta, myGraph4)
+
+    """ax = plt.subplot(111)
+    ax.bar([4-0.25, 5-0.25,6-0.25, 8-0.25],allQAOACosts,width=0.5,color='b',align='center')
+    ax.bar([4+0.25, 5+0.25, 6+0.25, 8+0.25],allClassicalCosts,width=0.5,color='g',align='center')
+    ax.legend(('Max Cost from QAOA','Max Cost from Classical Brute Force'))
+    plt.xlabel('Number of Nodes')
+    plt.ylabel('Cost')
+    plt.title('QAOA Max Cost compared to Classical Max Cost')
+    plt.show()"""
 
     ### Make graphs.
     # I'm thinking we hold one variable constant at its maxed value
@@ -458,11 +525,12 @@ def main():
     plt.title('Average, Minimum and Maximum Costs')
     plt.show()
     """
-    """cost_plot = plt.bar(fbest, allcounts)
+    cost_plot = plt.bar(fbest, allcounts)
     plt.xlabel('QAOA Cost/Theoretical Max Cost')
     plt.ylabel('Number of Counts')
     plt.title('QAOA Cost/Theoretical Max Cost vs. Number of Counts ')
-    plt.show()"""
+    plt.show()
+
 def myMain():
     qc, c, q_input, q_output = makeCircuit(3, 2)
     #print(measureInput(qc,q_input, c))
