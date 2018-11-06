@@ -3,8 +3,44 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 from graph import *
+from matplotlib import cm
 from qiskit.backends.aer import QasmSimulatorPy
+from mpl_toolkits.mplot3d import Axes3D
+from scipy.optimize import minimize
+import plotly.plotly as py
+import plotly.graph_objs as go
+import pandas as pd
+
 P = 1;
+
+def isClique(graph, binString):
+    nodes = graph.getNodes()
+    edges = graph.getEdges()
+    nodesRefined = []
+    for i in range(len(nodes)):
+        if binString[i] == '1':
+            nodesRefined.append(i)
+    
+    for i in range(len(nodesRefined)):
+        for j in range(i, len(nodesRefined)):
+            tempE = Edge(nodes[nodesRefined[i]], nodes[nodesRefined[j]])
+            if (tempE not in edges):
+                return False
+    return True
+
+def classicalMC(graph):
+    currentMax = 0
+    maxedState = 0
+    for i in range(2**graph.getNumNodes()):
+        tempB = np.binary_repr(i, width = graph.getNumNodes())
+        if(list(tempB).count('1') > currentMax):
+            if(isClique(graph,tempB)):
+                currentMax = list(tempB).count('1')
+                maxedState = tempB
+    return currentMax, maxedState
+
+def getCost(currentMax):
+    return currentMax*(currentMax-1)/2
 
 def makeCircuit(inbits, outbits):
     q = qiskit.QuantumRegister(inbits+outbits)
@@ -46,15 +82,31 @@ def test5(qc, q_input, c):
 all_average_costs = []
 all_minimum_costs = []
 all_maximum_costs = []
-def applyQAOA(gamma, beta, graph):
+all_graphs_average_cost = dict()
+fbest = []
+all_counts = []
+myGraphTest = Graph(0,0)
+nodes = [Node(i) for i in range(3)]
+edges = []
+edges.append(Edge(nodes[0], nodes[1]))
+edges.append(Edge(nodes[1], nodes[2]))
+edges.append(Edge(nodes[2], nodes[0]))
+
+for n in nodes:
+    myGraphTest.addNode(n)
+    
+for e in edges:
+    myGraphTest.addEdge(e)
+def applyQAOA(gamma, beta, Graph):
+    #gamma, beta = params
     ### INIT REGS
-    qc, c, q_input, q_output = makeCircuit(graph.getNumNodes(), 1);
-    PENALTY = graph.getMaxEdges()
+    qc, c, q_input, q_output = makeCircuit(Graph.getNumNodes(), 1);
+    PENALTY = Graph.getMaxEdges()
     ### H on every input register
     for node in q_input:
         qc.h(node)
-    complement = graph.getEdgesComp();
-    edges = graph.getEdges()
+    complement = Graph.getEdgesComp();
+    edges = Graph.getEdges()
     ### APPLY V AND W
     for i in range(P):
         ### APPLY V
@@ -131,11 +183,25 @@ def applyQAOA(gamma, beta, graph):
     all_average_costs.append(average_cost)
     all_maximum_costs.append(max_cliqNum)
     all_minimum_costs.append(min_cliqNum)
+    currentMax,_ = classicalMC(Graph)
+    currentMaxCost = getCost(currentMax)
+    fbest = [cost/currentMaxCost for cost in costs]
+    all_counts = [counts[val] for val in values]
+    
+    #density = graph.getNumNodes()/graph.getNumEdges()
+    #if density not in all_graphs_average_cost:
+    #    all_graphs_average_cost[density] = all_average_costs
 
-    print("The maximum cliques of these graph are: " + str(max_vals) + "\n where a 1 represents in the clique and a 0 not in the clique")
+    #print("The maximum cliques of these graph are: " + str(max_vals) + "\n where a 1 represents in the clique and a 0 not in the clique")
     costs = [cost + abs(min_cliqNum) for cost in costs]
 
+    """
     cost_plot = plt.bar(values, costs, color=colors)
+    plt.text(len(counts)/2-0.5, -0.1*(max_cliqNum+abs(min_cliqNum)), 'Num Nodes: '+str(graph.getNumNodes())+' Num Edges: '+str(graph.getNumEdges()), fontsize=15, horizontalalignment='center', verticalalignment="bottom", bbox=dict(facecolor='white', alpha=0.5))
+    for val in max_vals:
+        index = list(counts.keys()).index(val)
+        plt.text(index-0.4 - len(str(val))/(2*len(counts)), max_cliqNum + abs(min_cliqNum), str(val), fontsize=8)
+
     plt.tick_params(
     axis='x',          # changes apply to the x-axis
     which='both',      # both major and minor ticks are affected
@@ -146,7 +212,49 @@ def applyQAOA(gamma, beta, graph):
     plt.ylabel("Cost offset by lowest Cost")
     plt.title("Output State vs. Cost")
     plt.show()
+    """
+    #return fbest, all_counts, expectation
     return expectation
+
+def mapInputSpace(graph):
+    gammahist = []
+    betahist = []
+    zhist = [[0 for x in range(25)] for i in range(25)]
+    print(zhist)
+    gamma_space = np.linspace(0, 2*np.pi, 25)
+    beta_space = np.linspace(0, np.pi, 25)
+    row = 0
+    col = 0
+    
+    for gamma in gamma_space:
+        col = 0
+        for beta in beta_space:
+            zhist[row][col] = applyQAOA(gamma, beta, graph) 
+            col += 1
+            print("Gamma: %s | Beta : %s " % (gamma, beta))
+        row += 1
+    print(zhist)
+   
+    gammahist = np.asarray(gammahist)
+    betahist = np.asarray(betahist)
+    gammahist, betahist = np.meshgrid(gamma_space, beta_space)
+    print(gammahist)
+    print(betahist)
+    zhist = np.asarray(zhist)
+    print(zhist)
+    trace = go.Surface(
+        x=gamma_space,
+        y=beta_space,
+        z=zhist)
+    data = [trace]
+    py.plot(data,filename="test1", auto_open=True, fileopt="overwrite")
+
+    """fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    surf = ax.plot_surface(gammahist, betahist, zhist, cmap=cm.get_cmap('coolwarm'),
+                       linewidth=0, antialiased=False)
+    fig.colorbar(surf, shrink=0.5, aspect=5)
+    plt.show()"""
 
 def gradient(func, params, epsilon, whichParam):
     first = params
@@ -161,33 +269,49 @@ def gradient(func, params, epsilon, whichParam):
 # eta is learning rate
 # threshold is the average of gamma and beta that we will consider a max
 
-def optimize(graph, epsilon, eta, threshold, startGamma, startBeta):
+def optimize(graph, epsilon, eta, threshold):
     count = 0
-    gamma = 2
+    # gamma = 2.00000242
+    # beta = 1.9999998
+    # gamma = 2.0017074981249996
+    # beta = 2.0007869093750004
     beta = 2
-    dgamma = (applyQAOA(gamma + epsilon, beta, graph) - applyQAOA(gamma - epsilon, beta, graph))/(2*epsilon)
-    dbeta = (applyQAOA(gamma, beta + epsilon, graph) - applyQAOA(gamma, beta + epsilon, graph))/(2*epsilon)
-    flipper = True #Alternate between maxing gamma and maxing beta
-    while((abs(dgamma) + abs(dbeta))/2 > threshold):
-        if(flipper):
-            if (dgamma > 0): 
-                gamma += (dgamma * eta) % (2*np.pi)
-            elif (dgamma < 0):
-                gamma -= (dgamma * eta) % (2*np.pi)
-            dgamma = (applyQAOA(gamma + epsilon, beta, graph) - applyQAOA(gamma - epsilon, beta, graph))/(2*epsilon)
-        else:
-            if(dbeta > 0):
-                beta += (dbeta * eta) % np.pi
-            elif (dbeta < 0):
-                beta -= (dbeta * eta) % np.pi
-            dbeta = (applyQAOA(gamma, beta + epsilon, graph) - applyQAOA(gamma, beta + epsilon, graph))/(2*epsilon)
-            
+    gamma = 2
+    gammahist = [gamma, gamma + epsilon, gamma]
+    betahist = [beta, beta,  beta + epsilon]
+    zhist = [applyQAOA(gamma, beta, graph)[2], applyQAOA(gamma + epsilon, beta, graph)[2],
+            applyQAOA(gamma, beta + epsilon, graph)[2]]
+    dgamma = (zhist[-2] - zhist[-3])/(epsilon)
+    dbeta = (zhist[-1] - zhist[-3] )/(epsilon)
+    gradient = [dgamma, dbeta]
+    gamma =  (gamma + (dgamma * eta)) % (2*np.pi)
+    beta =  (beta + (dbeta * eta)) % np.pi
+    while(np.linalg.norm(gradient) > threshold):
+        gammahist += [gamma, gamma+epsilon, gamma]
+        betahist += [beta, beta, beta+epsilon]
+        zhist += [applyQAOA(gamma, beta, graph)[2], applyQAOA(gamma + epsilon, beta, graph)[2], applyQAOA(gamma, beta + epsilon, graph)[2]]
+        dgamma = (zhist[-2] - zhist[-3])/(epsilon)
+        dbeta = (zhist[-1] - zhist[-3])/(epsilon) 
+        gradient = [dgamma, dbeta]  
+        gamma =  (gamma + (dgamma * eta)) % (2*np.pi)
+        beta =  (beta + (dbeta * eta)) % np.pi
         count+=1
-        flipper = not flipper
+        print("Function run : ", count)
+        print("Gamma : %s | Gamma Gradient: %s" % (gamma, dgamma))
+        print("Beta : %s | Beta Gradient: %s" % (beta, dbeta))
     
-    print(count)
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    gammahist = np.asarray(gammahist)
+    betahist = np.asarray(betahist)
+    zhist = np.asarray(zhist)
+    surf = ax.plot_surface(gammahist,betahist,zhist, cmap=cm.get_cmap('coolwarm'),
+                       linewidth=0, antialiased=False)
+    fig.colorbar(surf, shrink=0.5, aspect=5)
+    plt.show()
     return gamma, beta
 
+"""
 def superOptimize(graph, epsilon, eta, threshold, numOfTrials):
     maxVal = -graph.getMaxEdges() * graph.getNumEdges()
     maxG = -1
@@ -203,8 +327,7 @@ def superOptimize(graph, epsilon, eta, threshold, numOfTrials):
             maxVal = tempVal
             maxG = tempG
             maxB = tempB
-
-    return maxG, maxB, maxVal
+    return maxG, maxB, maxVal"""
         
 def main():
     ### If P > 0
@@ -216,7 +339,7 @@ def main():
     #for i in range(P):
     #    beta.append(np.random.uniform(0,np.pi))
 
-
+  
     
     ###TESTING GRAPH
     myGraph = Graph(0, 0)
@@ -235,36 +358,47 @@ def main():
     for e in edges:
         myGraph.addEdge(e)
 
-        
+    mapInputSpace(myGraph)
+    #print(classicalMC(myGraph))
     ### Run the algorithm
     #expect = applyQAOA(gamma, beta, myGraph)
     #print("Expectation Value:", expect)
 
+    """myGraph2 = Graph(5)
+    myGraph3 = Graph(6)
+
+    myGraph4 = Graph(8)
+   
+    myGraph5 = Graph(10)"""
+
     ### OPTIMIZE
-    #bestGamma, bestBeta = optimize(myGraph, 0.1, 0.1, 0.05)
+    #bestGamma, bestBeta = optimize(myGraphTest, 0.05, 0.00001, 0.05)
+    """res = minimize(applyQAOA,[(2,2)] , method='L-BFGS-B', bounds={(0, 2*np.pi), (0, np.pi)}, options={'disp': True})
+    if res.success:
+        fitted_params = res.x
+        print(fitted_params)
+    else:
+        raise ValueError(res.message)"""
     # Optimal Gamma: 3.10693359375 Optimal Beta: 2.50830078125
     # This is very likely a local max though.
     # We might want optimize from various start positions and compare results
     # Also need to discuss optimization parameters cause I kind of chose those arbitrarily
 
     #bestGamma, bestBeta, bestVal = superOptimize(myGraph, 0.1, 0.1, 0.05, 16)
-    bestGamma = 4.6015625
-    bestBeta = 0.18702062766020688
-    print("BestGamma: ", bestGamma, "bestBeta", bestBeta)
-    print("Optimized Expectation value", applyQAOA(bestGamma, bestBeta, myGraph))
+    #bestGamma = 4.6015625
+    #bestBeta = 0.18702062766020688
+    #print("BestGamma: ", bestGamma, "bestBeta", bestBeta)
+
+    #fbest, allcounts, _ = applyQAOA(bestGamma, bestBeta, myGraph5)
     #print("Optimal Gamma:", bestGamma, "Optimal Beta:", bestBeta)
 
+   
 
-    myGraph2 = Graph(6)
-    myGraph3 = Graph(6)
+    #fbest, allcounts, _ = applyQAOA(bestGamma, bestBeta, myGraph2)
 
-    myGraph4 = Graph(8)
+    #fbest2, allcounts2, _ = applyQAOA(bestGamma, bestBeta, myGraph3)
 
-    print("Optimized Expectation value for myGraph2", applyQAOA(bestGamma, bestBeta, myGraph2))
-
-    print("Optimized Expectation value for myGraph3", applyQAOA(bestGamma, bestBeta, myGraph3))
-
-    print("Optimized Expectation value for myGraph4", applyQAOA(bestGamma, bestBeta, myGraph4))
+    #fbest3, allcounts4, _ = applyQAOA(bestGamma, bestBeta, myGraph4)
 
     ### Make graphs.
     # I'm thinking we hold one variable constant at its maxed value
@@ -300,7 +434,7 @@ def main():
     #plt.ylabel('Expectation Value')
     #plt.title('Expectation Value vs Gamma and Beta')
     #plt.show()
-
+    """
     plt.scatter([4, 6, 6, 8], all_average_costs)
     plt.scatter([4, 6, 6, 8], all_minimum_costs)
     plt.scatter([4, 6, 6, 8], all_maximum_costs)
@@ -309,8 +443,12 @@ def main():
     plt.ylabel('Cost')
     plt.title('Average, Minimum and Maximum Costs')
     plt.show()
-
-    
+    """
+    """cost_plot = plt.bar(fbest, allcounts)
+    plt.xlabel('QAOA Cost/Theoretical Max Cost')
+    plt.ylabel('Number of Counts')
+    plt.title('QAOA Cost/Theoretical Max Cost vs. Number of Counts ')
+    plt.show()"""
 def myMain():
     qc, c, q_input, q_output = makeCircuit(3, 2)
     #print(measureInput(qc,q_input, c))
